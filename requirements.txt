@@ -1,7 +1,19 @@
+# Core data
 pandas
 numpy
+scipy
+
+# Machine learning
 scikit-learn
+xgboost
+
+# Visualisation
 matplotlib
 seaborn
+
+# Model persistence
+joblib
+
+# Jupyter
 jupyter
 ipykernel
