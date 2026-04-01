@@ -1,0 +1,14 @@
+{% if rows %}
+{% for row in rows %}
+<tr class="{{ 'row-approved' if row.decision == 'APPROVED' else 'row-declined' }}">
+  <td>#{{ row.id }}</td>
+  <td><span class="badge {{ 'badge-approved' if row.decision == 'APPROVED' else 'badge-declined' }}">{{ row.decision }}</span></td>
+  <td>{{ "%.1f"|format(row.probability * 100) }}%</td>
+  <td>{{ "%.0f"|format(row.fico_score) if row.fico_score else "—" }}</td>
+  <td>${{ "{:,.0f}".format(row.annual_income) if row.annual_income else "—" }}</td>
+  <td>{{ row.created_at.strftime("%H:%M:%S") if row.created_at else "—" }}</td>
+</tr>
+{% endfor %}
+{% else %}
+<tr><td colspan="6" class="empty-row">No predictions yet.</td></tr>
+{% endif %}

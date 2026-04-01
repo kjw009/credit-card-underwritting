@@ -1,0 +1,16 @@
+{% set approved = entry.decision == "APPROVED" %}
+<div class="result-card {{ 'approved' if approved else 'declined' }}">
+  <div class="result-icon">{{ "✓" if approved else "✗" }}</div>
+  <div class="result-body">
+    <h2 class="{{ 'text-green' if approved else 'text-red' }}">
+      {{ entry.decision }}
+    </h2>
+    <p class="probability">Approval probability: <strong>{{ "%.1f"|format(entry.probability * 100) }}%</strong></p>
+    <div class="result-meta">
+      <span>FICO: <strong>{{ "%.0f"|format(entry.fico_score) if entry.fico_score else "—" }}</strong></span>
+      <span>Income: <strong>${{ "{:,.0f}".format(entry.annual_income) if entry.annual_income else "—" }}</strong></span>
+      <span>DTI: <strong>{{ "%.1f"|format(entry.debt_to_income_ratio * 100) ~ "%" if entry.debt_to_income_ratio else "—" }}</strong></span>
+      <span>Record #{{ entry.id }}</span>
+    </div>
+  </div>
+</div>

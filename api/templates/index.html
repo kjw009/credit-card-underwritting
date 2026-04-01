@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Credit Card Underwriting</title>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green:  #16a34a; --green-lt: #dcfce7;
+      --red:    #dc2626; --red-lt:   #fee2e2;
+      --blue:   #2563eb; --blue-lt:  #dbeafe;
+      --gray:   #6b7280; --gray-lt:  #f3f4f6;
+      --border: #e5e7eb; --radius: 8px;
+      --font: system-ui, -apple-system, sans-serif;
+    }
+    body { font-family: var(--font); background: #f9fafb; color: #111827; font-size: 14px; }
+    h1 { font-size: 1.5rem; font-weight: 700; }
+    h2 { font-size: 1.1rem; font-weight: 600; }
+    h3 { font-size: .9rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--gray); margin-bottom: .5rem; }
+    label { display: block; font-size: .78rem; font-weight: 500; color: #374151; margin-bottom: 2px; }
+    input[type=number], input[type=text], select {
+      width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: .82rem; background: #fff; transition: border-color .15s;
+    }
+    input[type=number]:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-lt); }
+    button { cursor: pointer; border: none; border-radius: var(--radius); font-size: .85rem; font-weight: 600; padding: 8px 18px; transition: opacity .15s; }
+    button:hover { opacity: .85; }
+    .btn-primary { background: var(--blue); color: #fff; }
+    .btn-ghost   { background: var(--gray-lt); color: #374151; }
+    .btn-sm      { padding: 4px 10px; font-size: .75rem; }
+
+    .shell { max-width: 1100px; margin: 0 auto; padding: 20px 16px; }
+    .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .header-left { display: flex; align-items: center; gap: 12px; }
+    .pill { background: var(--blue-lt); color: var(--blue); padding: 2px 10px; border-radius: 99px; font-size: .72rem; font-weight: 600; }
+    .layout { display: grid; grid-template-columns: 1fr 360px; gap: 20px; align-items: start; }
+    @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+
+    .card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+    .card + .card { margin-top: 16px; }
+
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 2px solid var(--border); flex-wrap: wrap; }
+    .tab-btn {
+      padding: 6px 14px; border-radius: var(--radius) var(--radius) 0 0; border: none;
+      background: none; color: var(--gray); font-size: .82rem; font-weight: 500; cursor: pointer;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+    }
+    .tab-btn.active { color: var(--blue); border-bottom-color: var(--blue); background: var(--blue-lt); }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    .field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+    .field-group { margin-bottom: 16px; }
+
+    .result-card { border-radius: var(--radius); padding: 20px; display: flex; align-items: center; gap: 16px; border: 2px solid; }
+    .result-card.approved { background: var(--green-lt); border-color: var(--green); }
+    .result-card.declined { background: var(--red-lt);   border-color: var(--red);   }
+    .result-icon { font-size: 2.5rem; line-height: 1; }
+    .result-body h2 { font-size: 1.4rem; }
+    .text-green { color: var(--green); }
+    .text-red   { color: var(--red); }
+    .probability { color: #374151; margin: 4px 0 8px; font-size: .85rem; }
+    .result-meta { display: flex; flex-wrap: wrap; gap: 12px; font-size: .78rem; color: var(--gray); }
+    .result-meta strong { color: #111827; }
+    #result-panel { min-height: 80px; }
+    .placeholder { color: var(--gray); font-size: .85rem; padding: 16px 0; }
+
+    table { width: 100%; border-collapse: collapse; font-size: .8rem; }
+    th { text-align: left; padding: 6px 10px; background: var(--gray-lt); color: var(--gray); font-weight: 600; text-transform: uppercase; font-size: .7rem; letter-spacing: .04em; }
+    td { padding: 6px 10px; border-bottom: 1px solid var(--border); }
+    .row-approved td { background: #f0fdf4; }
+    .row-declined td { background: #fff5f5; }
+    .empty-row { color: var(--gray); text-align: center; padding: 20px; }
+    .badge { padding: 2px 8px; border-radius: 99px; font-size: .7rem; font-weight: 700; }
+    .badge-approved { background: var(--green-lt); color: var(--green); }
+    .badge-declined { background: var(--red-lt);   color: var(--red);   }
+
+    .htmx-indicator { display: none; }
+    .htmx-request .htmx-indicator { display: inline; }
+    .spinner { animation: spin .6s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .rate-info { font-size: .72rem; color: var(--gray); margin-top: 6px; }
+    .error-banner { background: var(--red-lt); border: 1px solid var(--red); color: var(--red); border-radius: var(--radius); padding: 10px 14px; font-size: .82rem; margin-bottom: 12px; }
+    .hint { font-size: .72rem; color: var(--gray); margin-top: 2px; }
+  </style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="header">
+    <div class="header-left">
+      <h1>Credit Card Underwriting</h1>
+      <span class="pill">XGBoost Model</span>
+    </div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn-ghost btn-sm" onclick="loadExample()">Load Example</button>
+      <a href="/docs" target="_blank"><button class="btn-ghost btn-sm">API Docs</button></a>
+    </div>
+  </div>
+
+  <div class="layout">
+
+    <!-- ── LEFT: form ──────────────────────────────────────────────── -->
+    <div>
+      <form id="predict-form" onsubmit="return submitForm(event)">
+
+        <div class="card" style="padding-bottom:0">
+          <div class="tabs" id="tabs">
+            <button type="button" class="tab-btn active"  onclick="switchTab('personal',this)">Personal</button>
+            <button type="button" class="tab-btn"         onclick="switchTab('income',this)">Income & Expenses</button>
+            <button type="button" class="tab-btn"         onclick="switchTab('credit',this)">Credit Profile</button>
+            <button type="button" class="tab-btn"         onclick="switchTab('scores',this)">Risk Scores</button>
+          </div>
+
+          <!-- Tab: Personal -->
+          <div id="tab-personal" class="tab-panel active" style="padding-bottom:16px;">
+            <div class="field-grid">
+              <div>
+                <label>Education Level</label>
+                <select id="f_education_level" name="education_level">
+                  <option value="">— Select —</option>
+                  <option>Less than High School</option>
+                  <option>High School Diploma</option>
+                  <option>Some College</option>
+                  <option>Associate Degree</option>
+                  <option>Bachelor Degree</option>
+                  <option>Master Degree</option>
+                  <option>Doctoral Degree</option>
+                  <option>Professional Degree</option>
+                </select>
+              </div>
+              <div>
+                <label>Employment Status</label>
+                <select id="f_employment_status" name="employment_status">
+                  <option value="">— Select —</option>
+                  <option>Full-Time</option>
+                  <option>Part-Time</option>
+                  <option>Self-Employed</option>
+                  <option>Unemployed</option>
+                  <option>Retired</option>
+                  <option>Homemaker</option>
+                  <option>Student</option>
+                </select>
+              </div>
+              <div>
+                <label>Housing Status</label>
+                <select id="f_housing_status" name="housing_status">
+                  <option value="">— Select —</option>
+                  <option>Rent</option>
+                  <option>Mortgage</option>
+                  <option>Own Outright</option>
+                </select>
+              </div>
+              <div>
+                <label>Years Employed</label>
+                <input type="number" step="0.5" min="0" id="f_years_employed" name="years_employed" placeholder="e.g. 5" />
+              </div>
+              <div>
+                <label>Recent Employment Change?</label>
+                <select id="f_recent_employment_change" name="recent_employment_change">
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+              <div>
+                <label>Has Existing Mortgage?</label>
+                <select id="f_has_existing_mortgage" name="has_existing_mortgage">
+                  <option value="false">No</option>
+                  <option value="true">Yes</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Income & Expenses -->
+          <div id="tab-income" class="tab-panel" style="padding-bottom:16px;">
+            <h3>Income</h3>
+            <div class="field-grid">
+              <div>
+                <label>Annual Income ($)</label>
+                <input type="number" step="1" min="0" id="f_annual_income" name="annual_income" placeholder="e.g. 75000" />
+              </div>
+              <div>
+                <label>Total Household Income ($)</label>
+                <input type="number" step="1" min="0" id="f_total_household_income" name="total_household_income" placeholder="e.g. 90000" />
+              </div>
+              <div>
+                <label>Savings Account Balance ($)</label>
+                <input type="number" step="1" min="0" id="f_savings_account_balance" name="savings_account_balance" placeholder="e.g. 5000" />
+              </div>
+              <div>
+                <label>Retirement Account Balance ($)</label>
+                <input type="number" step="1" min="0" id="f_retirement_account_balance" name="retirement_account_balance" placeholder="e.g. 25000" />
+              </div>
+              <div>
+                <label>Avg Monthly Deposits ($)</label>
+                <input type="number" step="1" min="0" id="f_avg_monthly_deposits" name="avg_monthly_deposits" placeholder="e.g. 6500" />
+              </div>
+              <div>
+                <label>Avg Monthly Withdrawals ($)</label>
+                <input type="number" step="1" min="0" id="f_avg_monthly_withdrawals" name="avg_monthly_withdrawals" placeholder="e.g. 5800" />
+              </div>
+              <div>
+                <label>Payroll Direct Deposit ($)</label>
+                <input type="number" step="1" min="0" id="f_payroll_direct_deposit_amount" name="payroll_direct_deposit_amount" placeholder="e.g. 5500" />
+              </div>
+            </div>
+            <h3 style="margin-top:12px;">Expenses</h3>
+            <div class="field-grid">
+              <div>
+                <label>Total Monthly Expenses ($)</label>
+                <input type="number" step="1" min="0" id="f_total_monthly_expenses" name="total_monthly_expenses" placeholder="e.g. 3000" />
+              </div>
+              <div>
+                <label>Monthly Rent / Mortgage ($)</label>
+                <input type="number" step="1" min="0" id="f_monthly_rent_mortgage" name="monthly_rent_mortgage" placeholder="e.g. 1500" />
+              </div>
+              <div>
+                <label>Self-Reported Rent ($)</label>
+                <input type="number" step="1" min="0" id="f_self_reported_monthly_rent" name="self_reported_monthly_rent" placeholder="e.g. 1500" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Credit Profile -->
+          <div id="tab-credit" class="tab-panel" style="padding-bottom:16px;">
+            <div class="field-grid">
+              <div>
+                <label>FICO Score</label>
+                <input type="number" step="1" min="300" max="850" id="f_fico_score" name="fico_score" placeholder="300–850" />
+              </div>
+              <div>
+                <label>Credit Utilization Ratio</label>
+                <input type="number" step="0.01" min="0" max="1" id="f_credit_utilization_ratio" name="credit_utilization_ratio" placeholder="0.00–1.00" />
+                <p class="hint">e.g. 0.30 = 30% utilization</p>
+              </div>
+              <div>
+                <label>Debt-to-Income Ratio</label>
+                <input type="number" step="0.01" min="0" id="f_debt_to_income_ratio" name="debt_to_income_ratio" placeholder="e.g. 0.30" />
+              </div>
+              <div>
+                <label>Oldest Account Age (months)</label>
+                <input type="number" step="1" min="0" id="f_oldest_account_age_months" name="oldest_account_age_months" placeholder="e.g. 84" />
+              </div>
+              <div>
+                <label>Number of Open Accounts</label>
+                <input type="number" step="1" min="0" id="f_num_open_accounts" name="num_open_accounts" placeholder="e.g. 5" />
+              </div>
+              <div>
+                <label>Number of Student Loans</label>
+                <input type="number" step="1" min="0" id="f_num_student_loans" name="num_student_loans" placeholder="e.g. 1" />
+              </div>
+              <div>
+                <label>Student Loan Balance ($)</label>
+                <input type="number" step="1" min="0" id="f_student_loan_outstanding_balance" name="student_loan_outstanding_balance" placeholder="e.g. 15000" />
+              </div>
+              <div>
+                <label>Mortgage Balance ($)</label>
+                <input type="number" step="1" min="0" id="f_mortgage_outstanding_balance" name="mortgage_outstanding_balance" placeholder="e.g. 0" />
+              </div>
+              <div>
+                <label>Requested Credit Limit ($)</label>
+                <input type="number" step="1" min="0" id="f_requested_credit_limit" name="requested_credit_limit" placeholder="e.g. 5000" />
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab: Risk Scores -->
+          <div id="tab-scores" class="tab-panel" style="padding-bottom:16px;">
+            <p style="font-size:.78rem;color:var(--gray);margin-bottom:12px;">
+              Pre-computed scores provided by credit bureau and internal scoring systems.
+            </p>
+            <div class="field-grid">
+              <div>
+                <label>Predicted Default Probability</label>
+                <input type="number" step="0.01" min="0" max="1" id="f_predicted_default_probability" name="predicted_default_probability" placeholder="0.00–1.00" />
+              </div>
+              <div>
+                <label>Employment Stability Score</label>
+                <input type="number" step="0.01" min="0" max="1" id="f_employment_stability_score" name="employment_stability_score" placeholder="0.00–1.00" />
+              </div>
+              <div>
+                <label>Income Stability Score</label>
+                <input type="number" step="0.01" min="0" max="1" id="f_income_stability_score" name="income_stability_score" placeholder="0.00–1.00" />
+              </div>
+              <div>
+                <label>Financial Health Score</label>
+                <input type="number" step="0.01" min="0" max="1" id="f_financial_health_score" name="financial_health_score" placeholder="0.00–1.00" />
+              </div>
+              <div>
+                <label>Combined Risk Score</label>
+                <input type="number" step="1" min="200" max="600" id="f_combined_risk_score" name="combined_risk_score" placeholder="200–600" />
+              </div>
+            </div>
+          </div>
+        </div><!-- /.card -->
+
+        <!-- Submit bar -->
+        <div class="card" style="display:flex;align-items:center;gap:12px;margin-top:12px;">
+          <button type="submit" class="btn-primary">
+            Score Application
+            <span id="spinner" class="htmx-indicator spinner">⏳</span>
+          </button>
+          <button type="button" class="btn-ghost" onclick="resetForm()">Clear</button>
+          <span class="rate-info">Rate limit: 10 predictions / minute</span>
+        </div>
+
+        <div id="error-banner" style="display:none;" class="error-banner"></div>
+
+      </form>
+    </div>
+
+    <!-- ── RIGHT: result + history ─────────────────────────────────── -->
+    <div>
+      <div class="card">
+        <h3>Decision</h3>
+        <div id="result-panel">
+          <p class="placeholder">Submit an application to see the decision here.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Recent Predictions</h3>
+        <div style="overflow-x:auto;">
+          <table>
+            <thead>
+              <tr><th>#</th><th>Decision</th><th>Prob.</th><th>FICO</th><th>Income</th><th>Time</th></tr>
+            </thead>
+            <tbody id="history-body"
+                   hx-get="/predictions"
+                   hx-trigger="load, every 5s"
+                   hx-target="#history-body"
+                   hx-swap="innerHTML">
+              <tr><td colspan="6" class="empty-row">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const EXAMPLE = {
+  education_level: "Bachelor Degree",
+  employment_status: "Full-Time",
+  housing_status: "Rent",
+  years_employed: 5,
+  recent_employment_change: "false",
+  has_existing_mortgage: "false",
+  annual_income: 42280,
+  total_household_income: 42100,
+  savings_account_balance: 2986,
+  retirement_account_balance: 10478,
+  avg_monthly_deposits: 3750,
+  avg_monthly_withdrawals: 3650,
+  payroll_direct_deposit_amount: 2900,
+  total_monthly_expenses: 2362,
+  monthly_rent_mortgage: 959,
+  self_reported_monthly_rent: 959,
+  fico_score: 532,
+  credit_utilization_ratio: 0.58,
+  debt_to_income_ratio: 0.67,
+  oldest_account_age_months: 181,
+  num_open_accounts: 6,
+  num_student_loans: 2,
+  student_loan_outstanding_balance: 8362,
+  mortgage_outstanding_balance: 0,
+  requested_credit_limit: 7500,
+  predicted_default_probability: 0.43,
+  employment_stability_score: 0.48,
+  income_stability_score: 0.43,
+  financial_health_score: 0.52,
+  combined_risk_score: 336,
+};
+
+function loadExample() {
+  for (const [key, val] of Object.entries(EXAMPLE)) {
+    const el = document.getElementById("f_" + key);
+    if (!el) continue;
+    el.value = val;
+  }
+}
+
+function resetForm() {
+  document.getElementById("predict-form").reset();
+  document.getElementById("result-panel").innerHTML =
+    '<p class="placeholder">Submit an application to see the decision here.</p>';
+}
+
+function switchTab(name, btn) {
+  document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.getElementById("tab-" + name).classList.add("active");
+  btn.classList.add("active");
+}
+
+function clearError() {
+  const el = document.getElementById("error-banner");
+  el.style.display = "none";
+  el.textContent = "";
+}
+
+function showError(status, text) {
+  const el = document.getElementById("error-banner");
+  try {
+    const body = JSON.parse(text);
+    const d = body.detail || body;
+    el.textContent = `Error ${status}: ${d.code || ""} — ${d.message || JSON.stringify(d)}`;
+  } catch {
+    el.textContent = `Error ${status}: ${text.slice(0, 200)}`;
+  }
+  el.style.display = "block";
+}
+
+function submitForm(evt) {
+  evt.preventDefault();
+  clearError();
+
+  const payload = {};
+  document.querySelectorAll("#predict-form input[name], #predict-form select[name]").forEach(el => {
+    const v = el.value.trim();
+    if (v === "") return;
+    const name = el.name;
+    // Boolean fields
+    if (name === "recent_employment_change" || name === "has_existing_mortgage") {
+      payload[name] = (v === "true");
+    } else if (el.tagName === "SELECT") {
+      payload[name] = v;
+    } else {
+      payload[name] = parseFloat(v);
+    }
+  });
+
+  fetch("/predict", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "HX-Request": "true" },
+    body: JSON.stringify(payload),
+  })
+  .then(async res => {
+    const text = await res.text();
+    if (!res.ok) {
+      let detail;
+      try { detail = JSON.parse(text).detail; } catch { detail = { message: text }; }
+      showError(res.status, JSON.stringify(detail));
+    } else {
+      document.getElementById("result-panel").innerHTML = text;
+      htmx.trigger("#history-body", "load");
+    }
+  })
+  .catch(err => showError("Network", err.message));
+
+  return false;
+}
+</script>
+</body>
+</html>

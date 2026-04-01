@@ -17,3 +17,12 @@ joblib
 # Jupyter
 jupyter
 ipykernel
+
+# API
+fastapi
+uvicorn[standard]
+slowapi
+jinja2
+aiofiles
+python-multipart
+sqlalchemy
