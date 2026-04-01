@@ -14,7 +14,7 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-
+# open a new database session for each request and ensure it's closed after
 def get_db():
     db = SessionLocal()
     try:
