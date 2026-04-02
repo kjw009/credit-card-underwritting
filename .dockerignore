@@ -1,0 +1,13 @@
+.cc_venv/
+__pycache__/
+*.pyc
+*.pyo
+.git/
+data/
+notebooks/
+reports/
+tests/
+instance/
+*.db
+*.ipynb
+.env
