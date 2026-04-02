@@ -38,6 +38,7 @@ def _fico_tier(score: float) -> int:
 
 _woe_maps: dict | None = None
 
+# Cache WoE maps in memory after first load, since they'll be used for every prediction.
 def _load_woe() -> dict:
     global _woe_maps
     if _woe_maps is None:
