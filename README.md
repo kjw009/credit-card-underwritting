@@ -25,6 +25,8 @@
 - [Approval Decision Logic](#approval-decision-logic)
 - [Fair Lending Compliance](#fair-lending-compliance)
 - [FastAPI Serving Layer](#fastapi-serving-layer)
+- [Authentication](#authentication)
+- [Docker](#docker)
 - [Installation](#installation)
 - [Usage](#usage)
 
@@ -151,9 +153,11 @@ credit-card-underwriting/
 │   ├── main.py                         ← routes: POST /predict, GET /predictions, GET /health
 │   ├── feature_engineering.py          ← log1p · encoding · derived features · WoE
 │   ├── schemas.py                      ← ApplicationRequest, PredictionResponse, APIError
-│   ├── models.py                       ← SQLAlchemy ORM (PredictionLog)
+│   ├── models.py                       ← SQLAlchemy ORM (PredictionLog, User)
 │   ├── database.py                     ← SQLite engine & session factory
 │   ├── limiter.py                      ← slowapi rate limiter (10 req/min)
+│   ├── auth.py                         ← registration & login routes
+│   ├── security.py                     ← JWT creation/verification, password hashing
 │   └── templates/
 │       ├── index.html                  ← HTMX browser UI (4-tab form)
 │       ├── result_fragment.html        ← HTMX decision result fragment
@@ -181,7 +185,9 @@ credit-card-underwriting/
 │   ├── 03_train_test_split.ipynb
 │   ├── 04_baseline_model.ipynb
 │   ├── 05_model_selection.ipynb
-│   └── 06_fastapi_endpoint.ipynb
+│   ├── 06_fastapi_endpoint.ipynb
+│   ├── 07_authentication.ipynb
+│   └── 08_docker.ipynb
 │
 ├── 📂 reports/
 │   └── figures/                        ← saved charts and plots
@@ -202,6 +208,8 @@ credit-card-underwriting/
 | 04 | Baseline Model | Logistic regression, full metric suite (KS, Gini, AUC, Lift, Calibration) |
 | 05 | Model Selection | XGBoost vs Neural Network vs baseline comparison, final model selection |
 | 06 | FastAPI Endpoint | Serving layer: feature engineering pipeline, `ApplicationRequest` schema, HTMX browser UI, rate limiting, SQLite audit log, end-to-end tests |
+| 07 | Authentication | JWT-based auth: user registration, login, password hashing (Argon2), protected routes, token expiry |
+| 08 | Docker | Containerisation: Dockerfile walkthrough, building the image, running with environment variables |
 
 ---
 
@@ -434,6 +442,68 @@ The browser UI at `http://localhost:8000/` provides a 4-tab form for manual scor
 | Income & Expenses | Raw dollar amounts — income, savings, deposits, expenses, rent |
 | Credit Profile | FICO, utilization, DTI, account history, loan balances, requested limit |
 | Risk Scores | 5 bureau/system scores (default probability, stability, financial health) |
+
+---
+
+## Authentication
+
+The API uses JWT (JSON Web Token) authentication. All prediction endpoints require a valid token.
+
+### Register a user
+
+```bash
+curl -X POST http://localhost:8000/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email": "user@example.com", "password": "yourpassword"}'
+```
+
+### Login and get a token
+
+```bash
+curl -X POST http://localhost:8000/auth/token \
+  -d "username=user@example.com&password=yourpassword"
+```
+
+Use the returned `access_token` in the `Authorization` header for subsequent requests:
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Authorization: Bearer <your-token>" \
+  -H "Content-Type: application/json" \
+  -d '{...}'
+```
+
+Tokens expire after 30 minutes.
+
+---
+
+## Docker
+
+### Prerequisites
+
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running
+- A `SECRET_KEY` value for signing JWTs (generate one with `python3 -c "import secrets; print(secrets.token_hex(32))"`)
+
+### Build the image
+
+```bash
+docker build -t credit-card-underwriting .
+```
+
+### Run the container
+
+```bash
+docker run -p 8000:8000 -e SECRET_KEY=your-secret-key-here credit-card-underwriting
+```
+
+To persist the SQLite database between runs, mount the `instance/` directory:
+
+```bash
+docker run -p 8000:8000 -e SECRET_KEY=your-secret-key-here \
+  -v $(pwd)/instance:/app/instance credit-card-underwriting
+```
+
+The API will be available at `http://localhost:8000`.
 
 ---
 
