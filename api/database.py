@@ -3,7 +3,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent.parent / "data" / "predictions.db"
+DB_PATH = Path(__file__).parent.parent / "instance" / "predictions.db"
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(
