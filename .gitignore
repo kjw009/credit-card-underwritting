@@ -37,3 +37,4 @@ Thumbs.db
 
 # word documents
 *.docx
+data/predictions.db
