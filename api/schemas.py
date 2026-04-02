@@ -111,3 +111,42 @@ class HealthResponse(BaseModel):
     model: str
     feature_count: int
     total_predictions: int
+
+# ── Authentication ────────────────────────────────────────────────────────
+
+class UserCreate(BaseModel):
+    """Payload for POST /auth/register."""
+    email: str
+    password: str
+    # Model-level validation to enforce email format and password strength
+    @field_validator("email")
+    @classmethod
+    def email_not_empty(cls, v: str) -> str:
+        v = v.strip().lower()
+        if not v:
+            raise ValueError("Email cannot be empty.")
+        return v
+
+    @field_validator("password")
+    @classmethod
+    def password_min_length(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters.")
+        return v
+
+class UserRead(BaseModel):
+    """Returned to the client after registration. Never exposes password_hash."""
+    id: int
+    email: str
+    is_active: bool
+
+    # from_attributes=True lets Pydantic read directly from a SQLAlchemy ORM object
+    # instead of requiring a plain dict. Without this, returning a User ORM instance
+    # from a route would raise a validation error.
+    model_config = {"from_attributes": True}
+
+class Token(BaseModel):
+    """Returned to the client after a successful login."""
+    access_token: str
+    token_type: str = "bearer"
+

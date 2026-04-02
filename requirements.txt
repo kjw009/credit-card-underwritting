@@ -26,3 +26,7 @@ jinja2
 aiofiles
 python-multipart
 sqlalchemy
+
+# Authentication
+passlib
+python-jose

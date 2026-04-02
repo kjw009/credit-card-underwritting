@@ -18,19 +18,20 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import joblib
-import numpy as np
 import pandas as pd
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from sqlalchemy.orm import Session
 
+from .auth import router as auth_router
 from .database import Base, engine, get_db
-from .limiter import limiter
-from .models import PredictionLog
 from .feature_engineering import engineer_features
+from .limiter import limiter
+from .models import PredictionLog, User
+from .security import SECRET_KEY, get_current_active_user
 from .schemas import (
     APIError,
     ApplicationRequest,
@@ -75,6 +76,14 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+# if not SECRET_KEY or len(SECRET_KEY) < 32:
+#     raise RuntimeError(
+#         "SECRET_KEY is not set or is too short (min 32 chars). "
+#         "Run: export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')"
+#     )
+
+# Mount the auth router — adds /auth/register and /auth/token
+app.include_router(auth_router)
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -133,6 +142,11 @@ def _log_prediction(
 
 # ── Routes ───────────────────────────────────────────────────────────────────
 
+@app.get("/login", response_class=HTMLResponse, include_in_schema=False)
+async def login_page(request: Request):
+    return templates.TemplateResponse(request, "login.html", {})
+
+
 @app.get("/", response_class=HTMLResponse, include_in_schema=False)
 async def home(request: Request):
     return templates.TemplateResponse(
@@ -143,7 +157,10 @@ async def home(request: Request):
 
 
 @app.get("/health", response_model=HealthResponse, tags=["ops"])
-async def health(db: Session = Depends(get_db)):
+async def health(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_active_user),  # Require authentication
+):
     count = db.query(PredictionLog).count()
     return HealthResponse(
         status="ok",
@@ -168,6 +185,7 @@ async def predict(
     request: Request,
     body: ApplicationRequest,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_active_user),  # Require authentication
 ):
     """Score a single credit application.
 
@@ -219,6 +237,7 @@ async def list_predictions(
     limit: int = 20,
     offset: int = 0,
     db: Session = Depends(get_db),
+    _: User = Depends(get_current_active_user),  # Require authentication
 ):
     """Return paginated prediction history (most recent first).
 
@@ -250,7 +269,10 @@ async def list_predictions(
     tags=["audit"],
     responses={404: {"model": APIError}},
 )
-async def get_prediction(prediction_id: int, db: Session = Depends(get_db)):
+async def get_prediction(prediction_id: int,
+                         db: Session = Depends(get_db),
+                         _: User = Depends(get_current_active_user) # Require authentication
+):  
     row = db.query(PredictionLog).filter(PredictionLog.id == prediction_id).first()
     if not row:
         raise HTTPException(
@@ -264,6 +286,6 @@ async def get_prediction(prediction_id: int, db: Session = Depends(get_db)):
 
 
 @app.get("/error-codes", tags=["ops"])
-async def error_codes():
+async def error_codes(_: User = Depends(get_current_active_user)):
     """Return the full error-code contract for this API."""
     return ERROR_CODES

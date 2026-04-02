@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "instance" / "predictions.db"
+DB_PATH.parent.mkdir(parents=True, exist_ok=True)  # create instance/ if it doesn't exist
 SQLALCHEMY_DATABASE_URL = f"sqlite:///{DB_PATH}"
 
 engine = create_engine(

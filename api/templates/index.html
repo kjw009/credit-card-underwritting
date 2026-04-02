@@ -95,9 +95,11 @@
       <h1>Credit Card Underwriting</h1>
       <span class="pill">XGBoost Model</span>
     </div>
-    <div style="display:flex;gap:8px;">
+    <div style="display:flex;gap:8px;align-items:center;">
+      <span id="user-email" style="font-size:.75rem;color:var(--gray);"></span>
       <button class="btn-ghost btn-sm" onclick="loadExample()">Load Example</button>
       <a href="/docs" target="_blank"><button class="btn-ghost btn-sm">API Docs</button></a>
+      <button class="btn-ghost btn-sm" onclick="logout()">Sign Out</button>
     </div>
   </div>
 
@@ -345,6 +347,28 @@
 </div>
 
 <script>
+  // Redirect to login if no token is stored
+  const TOKEN = localStorage.getItem("token");
+  if (!TOKEN) window.location.href = "/login";
+
+  // Decode the JWT payload to show the logged-in email (no library needed)
+  function parseJwtEmail(token) {
+    try {
+      return JSON.parse(atob(token.split(".")[1])).sub;
+    } catch { return ""; }
+  }
+  document.getElementById("user-email").textContent = parseJwtEmail(TOKEN);
+
+  // Inject Authorization header into every HTMX request automatically
+  document.addEventListener("htmx:configRequest", evt => {
+    evt.detail.headers["Authorization"] = "Bearer " + TOKEN;
+  });
+
+  function logout() {
+    localStorage.removeItem("token");
+    window.location.href = "/login";
+  }
+
 const EXAMPLE = {
   education_level: "Bachelor Degree",
   employment_status: "Full-Time",
@@ -438,7 +462,7 @@ function submitForm(evt) {
 
   fetch("/predict", {
     method: "POST",
-    headers: { "Content-Type": "application/json", "HX-Request": "true" },
+    headers: { "Content-Type": "application/json", "HX-Request": "true", "Authorization": "Bearer " + TOKEN },
     body: JSON.stringify(payload),
   })
   .then(async res => {
