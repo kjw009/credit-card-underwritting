@@ -2,7 +2,7 @@ from sqlalchemy import Column, Integer, Float, String, DateTime, Text
 from datetime import datetime
 from .database import Base
 
-
+# SQLAlchemy model for logging predictions to the SQLite database
 class PredictionLog(Base):
     __tablename__ = "prediction_logs"
 
