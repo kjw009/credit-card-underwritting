@@ -1,11 +1,12 @@
 # Credit Card Underwriting — ML Pipeline
 
-> A full end-to-end machine learning pipeline for predicting credit card application approval using 100,000 synthetic US consumer banking records across 200 variables.
+> A full end-to-end machine learning pipeline for predicting credit card application approval using 100,000 synthetic US consumer banking records across 200 variables, served via a production-ready FastAPI endpoint.
 
 ![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python&logoColor=white)
 ![Jupyter](https://img.shields.io/badge/Jupyter-Notebook-orange?logo=jupyter&logoColor=white)
 ![scikit-learn](https://img.shields.io/badge/scikit--learn-1.x-F7931E?logo=scikit-learn&logoColor=white)
 ![XGBoost](https://img.shields.io/badge/XGBoost-gradient%20boosting-brightgreen)
+![FastAPI](https://img.shields.io/badge/FastAPI-serving-009688?logo=fastapi&logoColor=white)
 ![License](https://img.shields.io/badge/data-synthetic%20only-lightgrey)
 ![Compliance](https://img.shields.io/badge/ECOA%20%2F%20Fair%20Housing-compliant-success)
 
@@ -23,6 +24,7 @@
 - [Train / Validation / Test Split](#train--validation--test-split)
 - [Approval Decision Logic](#approval-decision-logic)
 - [Fair Lending Compliance](#fair-lending-compliance)
+- [FastAPI Serving Layer](#fastapi-serving-layer)
 - [Installation](#installation)
 - [Usage](#usage)
 
@@ -118,24 +120,24 @@ flowchart TD
     S --> U
     T --> U
 
-    subgraph MODELS ["🤖 04–06 — Modelling"]
+    subgraph MODELS ["🤖 04–05 — Modelling"]
         U[04 Baseline\nLogistic Regression]
         U --> V[05 Model Selection\nXGBoost · Neural Network]
-        V --> W[06 Hyperparameter Tuning\nWinner Model]
     end
 
-    W --> X
+    V --> W
 
-    subgraph EVAL ["📈 07–08 — Evaluation & Explainability"]
-        X[07 Final Evaluation\nAUC · KS · Gini · Lift]
-        X --> Y[08 Explainability\nSHAP · Feature Importance]
+    subgraph API ["🚀 06 — FastAPI Serving Layer"]
+        W[Feature Engineering Pipeline\nlog1p · ratios · WoE]
+        W --> X[POST /predict\nApplicationRequest → decision + probability]
+        X --> Y[SQLite Audit Log\ndata/predictions.db]
     end
 
     style EDA fill:#dbeafe,stroke:#3b82f6
     style PREP fill:#dcfce7,stroke:#22c55e
     style SPLIT fill:#fef9c3,stroke:#eab308
     style MODELS fill:#fce7f3,stroke:#ec4899
-    style EVAL fill:#ede9fe,stroke:#8b5cf6
+    style API fill:#ede9fe,stroke:#8b5cf6
 ```
 
 ---
@@ -145,10 +147,33 @@ flowchart TD
 ```
 credit-card-underwriting/
 │
+├── 📂 api/                             ← FastAPI serving layer
+│   ├── main.py                         ← routes: POST /predict, GET /predictions, GET /health
+│   ├── feature_engineering.py          ← log1p · encoding · derived features · WoE
+│   ├── schemas.py                      ← ApplicationRequest, PredictionResponse, APIError
+│   ├── models.py                       ← SQLAlchemy ORM (PredictionLog)
+│   ├── database.py                     ← SQLite engine & session factory
+│   ├── limiter.py                      ← slowapi rate limiter (10 req/min)
+│   └── templates/
+│       ├── index.html                  ← HTMX browser UI (4-tab form)
+│       ├── result_fragment.html        ← HTMX decision result fragment
+│       └── history_fragment.html       ← HTMX prediction history fragment
+│
 ├── 📂 data/
-│   ├── raw/                        ← original immutable source data
-│   ├── processed/                  ← cleaned data, train/val/test splits
-│   └── external/                   ← data dictionary PDF
+│   ├── raw/                            ← original immutable source data
+│   │   └── cc_underwriting_100k.csv
+│   ├── processed/                      ← cleaned data, train/val/test splits
+│   │   ├── cc_underwriting_preprocessed.csv
+│   │   ├── X_train.csv / y_train.csv
+│   │   ├── X_val.csv   / y_val.csv
+│   │   └── X_test.csv  / y_test.csv
+│   └── external/                       ← data dictionary PDF
+│
+├── 📂 models/
+│   ├── xgb_default.pkl                 ← selected XGBoost model
+│   ├── baseline_logistic_regression.pkl
+│   ├── baseline_scaler.pkl
+│   └── woe_maps.json                   ← WoE bin maps for inference
 │
 ├── 📂 notebooks/
 │   ├── 01_exploratory_data_analysis.ipynb
@@ -156,24 +181,10 @@ credit-card-underwriting/
 │   ├── 03_train_test_split.ipynb
 │   ├── 04_baseline_model.ipynb
 │   ├── 05_model_selection.ipynb
-│   ├── 06_hyperparameter_tuning.ipynb
-│   ├── 07_model_evaluation.ipynb
-│   └── 08_model_explainability.ipynb
-│
-├── 📂 models/                      ← serialised trained models (.pkl)
+│   └── 06_fastapi_endpoint.ipynb
 │
 ├── 📂 reports/
-│   └── figures/                    ← saved charts and plots
-│
-├── 📂 src/
-│   ├── data_loader.py
-│   ├── features/
-│   │   └── build_features.py
-│   ├── models/
-│   │   ├── train.py
-│   │   └── predict.py
-│   └── visualization/
-│       └── visualize.py
+│   └── figures/                        ← saved charts and plots
 │
 ├── requirements.txt
 └── README.md
@@ -186,13 +197,11 @@ credit-card-underwriting/
 | # | Notebook | Description |
 |---|---|---|
 | 01 | Exploratory Data Analysis | Distributions, missing values, outlier detection, correlation heatmaps by section, approval rate analysis, decision logic validation |
-| 02 | Data Preprocessing | Fair lending drops, imputation, sentinel handling, winsorization, encoding, log transforms, ratio features, IV/WoE |
-| 03 | Train / Test Split | Out-of-time 60/20/20 split, stratification check, X/y separation |
+| 02 | Data Preprocessing | Fair lending drops, imputation, sentinel handling, winsorization, encoding, log transforms, ratio/interaction features, IV/WoE encoding, exports `woe_maps.json` |
+| 03 | Train / Test Split | Out-of-time 60/20/20 split by application year, stratification check, X/y separation |
 | 04 | Baseline Model | Logistic regression, full metric suite (KS, Gini, AUC, Lift, Calibration) |
-| 05 | Model Selection | XGBoost vs Neural Network vs baseline comparison |
-| 06 | Hyperparameter Tuning | Grid/Bayesian search on winning model |
-| 07 | Model Evaluation | Final OOT test performance, threshold selection |
-| 08 | Model Explainability | SHAP values, feature importance, partial dependence |
+| 05 | Model Selection | XGBoost vs Neural Network vs baseline comparison, final model selection |
+| 06 | FastAPI Endpoint | Serving layer: feature engineering pipeline, `ApplicationRequest` schema, HTMX browser UI, rate limiting, SQLite audit log, end-to-end tests |
 
 ---
 
@@ -202,26 +211,44 @@ credit-card-underwriting/
 flowchart LR
     RAW["📄 cc_underwriting_100k.csv\n200 columns · 100k rows"]
 
-    RAW --> PREP["02_data_preprocessing\n↓\ncc_underwriting_preprocessed.csv"]
+    RAW --> PREP["02_data_preprocessing\n↓\ncc_underwriting_preprocessed.csv\nwoe_maps.json"]
 
     PREP --> SPLIT["03_train_test_split"]
 
-    SPLIT --> TR["X_train.csv\ny_train.csv\n~60k rows"]
-    SPLIT --> VA["X_val.csv\ny_val.csv\n~20k rows"]
-    SPLIT --> TE["X_test.csv\ny_test.csv\n~20k rows"]
+    SPLIT --> TR["X_train.csv · y_train.csv\n~60k rows"]
+    SPLIT --> VA["X_val.csv · y_val.csv\n~20k rows"]
+    SPLIT --> TE["X_test.csv · y_test.csv\n~20k rows"]
 
-    TR --> M04["04 Baseline\nLogistic Regression\n→ baseline_logistic_regression.pkl\n→ baseline_scaler.pkl"]
+    TR --> M04["04 Baseline\n→ baseline_logistic_regression.pkl\n→ baseline_scaler.pkl"]
     TR --> M05["05 Model Selection\n→ xgb_default.pkl"]
 
-    M04 --> M06["06 Hyperparameter Tuning\n→ best_model.pkl"]
-    M05 --> M06
+    M05 --> API["06 FastAPI\nPOST /predict\n28 raw inputs → 78 features → decision"]
 ```
 
 ---
 
 ## Models
 
-### Logistic Regression — Baseline
+### Selected Model — XGBoost
+
+| Metric | Validation | Test (OOT 2024) |
+|---|---|---|
+| AUC | 0.9957 | 0.9957 |
+| Gini | 0.9915 | 0.9913 |
+| KS | 92.85% | 93.15% |
+
+**Configuration:** 500 estimators · best iteration 172 (early stopping) · max depth 6 · learning rate 0.05 · subsample 0.8 · colsample_bytree 0.8 · L1 α=0.1 · L2 λ=1.0
+
+```
+Round 1:  [Tree 1] ──────────────────────────────► residuals₁
+Round 2:  [Tree 1] + [Tree 2] ───────────────────► residuals₂
+  ...
+Round 172: Σ(0.05 × Tree_k) for k=1..172 ────────► P(approved)
+```
+
+---
+
+### Baseline — Logistic Regression
 
 ```
 Input Features (n)
@@ -240,47 +267,13 @@ Input Features (n)
 
 ---
 
-### XGBoost — Challenger
-
-```
-Round 1:  [Tree 1] ──────────────────────────────► residuals₁
-Round 2:  [Tree 1] + [Tree 2] ───────────────────► residuals₂
-Round 3:  [Tree 1] + [Tree 2] + [Tree 3] ────────► residuals₃
-  ...
-Round N:  Σ(learning_rate × Tree_k) for k=1..N ──► P(approved)
-```
-
-**Configuration:** 500 estimators · max depth 6 · learning rate 0.05 · early stopping on validation AUC · L1 + L2 regularisation
-
----
-
-### Neural Network — Challenger
-
-```
-Input Layer          Hidden Layers              Output
-(n features)
-
-  ┌────┐   ReLU    ┌───────┐   ReLU   ┌──────┐   ReLU   ┌────┐  Sigmoid  ┌────────────┐
-  │ x₁ │ ────────► │       │ ───────► │      │ ───────► │    │ ────────► │P(approved) │
-  │ x₂ │           │  128  │          │  64  │          │ 32 │           │  ∈ [0,1]  │
-  │ x₃ │ ────────► │neurons│ ───────► │      │ ───────► │    │ ────────► │            │
-  │ .  │           └───────┘          └──────┘          └────┘           └────────────┘
-  │ .  │
-  └────┘
-```
-
-**Configuration:** Adam optimiser · LR 0.001 · L2 α=0.001 · early stopping (patience=20) · batch size 256
-
----
-
 ### Model Selection Scorecard
 
-| Metric | Logistic Regression | XGBoost | Neural Network | Best |
+| Metric | Logistic Regression | XGBoost | Neural Network | Winner |
 |---|---|---|---|---|
-| Val AUC | — | — | — | TBD after run |
-| Val Gini | — | — | — | TBD after run |
-| Val KS | — | — | — | TBD after run |
-| Overfit Gap | — | — | — | TBD after run |
+| Val AUC | — | **0.9957** | — | XGBoost |
+| Val Gini | — | **0.9915** | — | XGBoost |
+| Val KS | — | **92.85%** | — | XGBoost |
 | Interpretability | ⭐⭐⭐⭐⭐ | ⭐⭐⭐ | ⭐⭐ | LR |
 | Training Speed | ⭐⭐⭐⭐⭐ | ⭐⭐⭐⭐ | ⭐⭐⭐ | LR |
 
@@ -301,7 +294,7 @@ Timeline ───────────────────────�
 
 **Why out-of-time?** A random split would allow the model to see future economic conditions during training (e.g. 2022 rate hikes) which inflates performance estimates. OOT testing simulates real deployment where the model always scores future applicants it has never seen.
 
-**Why stratified?** The target is ~65/35 imbalanced. Each split is verified to be within ±3% of the overall approval rate. If drift is detected, resampling corrects it without breaking the time ordering.
+**Why stratified?** The target is ~65/35 imbalanced. Each split is verified to be within ±3% of the overall approval rate.
 
 ---
 
@@ -335,9 +328,112 @@ The following protected-class variables are **excluded from all model features**
 | `dependents_count` | Familial status | Fair Housing Act |
 | `us_citizen_status` | National origin | ECOA |
 
-These columns are retained in a separate fairness audit dataset for disparate impact testing in notebook 09.
+These columns are retained in a separate fairness audit dataset for disparate impact testing.
 
-> **Note:** This dataset is 100% synthetic. No real applicant PII is included. All FCRA-regulated bureau variables are synthetic and carry no real-world credit implications.
+> **Note:** This dataset is 100% synthetic. No real applicant PII is included.
+
+---
+
+## FastAPI Serving Layer
+
+The trained XGBoost model is served via a FastAPI application in `api/`. Callers submit human-readable application fields — the API handles all preprocessing automatically.
+
+### Feature Engineering Pipeline
+
+Users provide **28 raw inputs**. The API automatically computes all 78 model features:
+
+```
+28 raw inputs
+    │
+    ├─► Log1p transforms        annual_income, balances, deposits → compressed scale
+    ├─► Ordinal encoding        education level (string → 1–7), FICO score → tier (1–5)
+    ├─► One-hot encoding        employment_status, housing_status → binary columns
+    ├─► Derived features        disposable income, DTI capacity, FICO × utilization, etc.
+    └─► WoE encoding            33 features → _woe variants via models/woe_maps.json
+                                        │
+                                78-feature dict → xgb_default.pkl → APPROVED / DECLINED
+```
+
+### Endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/predict` | Score a credit application. Returns decision + probability. |
+| `GET` | `/predictions` | Paginated prediction history (audit log). |
+| `GET` | `/predictions/{id}` | Single prediction record. |
+| `GET` | `/health` | Liveness check — model info and total predictions. |
+| `GET` | `/error-codes` | Full error code contract. |
+| `GET` | `/docs` | Swagger UI — interactive API documentation. |
+| `GET` | `/` | Browser UI — tabbed HTMX form for manual scoring. |
+
+### Rate Limits
+
+- `POST /predict` — 10 requests / minute / IP
+- `GET /predictions` — 30 requests / minute / IP
+
+### Example Request
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{
+    "education_level": "Bachelor Degree",
+    "employment_status": "Full-Time",
+    "housing_status": "Rent",
+    "years_employed": 5,
+    "recent_employment_change": false,
+    "has_existing_mortgage": false,
+    "annual_income": 75000,
+    "total_household_income": 90000,
+    "savings_account_balance": 15000,
+    "retirement_account_balance": 25000,
+    "avg_monthly_deposits": 6500,
+    "avg_monthly_withdrawals": 5800,
+    "payroll_direct_deposit_amount": 5500,
+    "total_monthly_expenses": 3000,
+    "monthly_rent_mortgage": 1500,
+    "self_reported_monthly_rent": 1500,
+    "fico_score": 720,
+    "credit_utilization_ratio": 0.20,
+    "debt_to_income_ratio": 0.30,
+    "oldest_account_age_months": 84,
+    "num_open_accounts": 5,
+    "num_student_loans": 1,
+    "student_loan_outstanding_balance": 10000,
+    "mortgage_outstanding_balance": 0,
+    "requested_credit_limit": 5000,
+    "predicted_default_probability": 0.10,
+    "employment_stability_score": 0.80,
+    "income_stability_score": 0.80,
+    "financial_health_score": 0.72,
+    "combined_risk_score": 280
+  }'
+```
+
+### Example Response
+
+```json
+{
+  "id": 1,
+  "decision": "APPROVED",
+  "probability": 0.9998,
+  "fico_score": 720.0,
+  "annual_income": 75000.0,
+  "debt_to_income_ratio": 0.3,
+  "created_at": "2026-04-02T14:32:01Z"
+}
+```
+
+### Browser UI
+
+The browser UI at `http://localhost:8000/` provides a 4-tab form for manual scoring:
+
+| Tab | Fields |
+|---|---|
+| Personal | Education, employment status, housing, years employed, flags |
+| Income & Expenses | Raw dollar amounts — income, savings, deposits, expenses, rent |
+| Credit Profile | FICO, utilization, DTI, account history, loan balances, requested limit |
+| Risk Scores | 5 bureau/system scores (default probability, stability, financial health) |
 
 ---
 
@@ -349,9 +445,9 @@ git clone <repo-url>
 cd credit-card-underwritting
 
 # Create and activate a virtual environment
-python -m venv venv
-source venv/bin/activate        # macOS / Linux
-venv\Scripts\activate           # Windows
+python -m venv .cc_venv
+source .cc_venv/bin/activate        # macOS / Linux
+.cc_venv\Scripts\activate           # Windows
 
 # Install dependencies
 pip install -r requirements.txt
@@ -361,14 +457,22 @@ pip install -r requirements.txt
 
 ## Usage
 
-Run notebooks in order:
+### Run the notebooks (in order)
 
 ```bash
 jupyter notebook notebooks/01_exploratory_data_analysis.ipynb
 ```
 
-Each notebook reads from and writes to `data/processed/` and `models/`. Place the raw dataset at:
+Each notebook reads from and writes to `data/processed/` and `models/`. Place the raw dataset at `data/raw/cc_underwriting_100k.csv`.
 
+### Start the API server
+
+```bash
+uvicorn api.main:app --reload --port 8000
 ```
-data/raw/cc_underwriting_100k.csv
-```
+
+| URL | Description |
+|---|---|
+| `http://localhost:8000/` | Browser UI |
+| `http://localhost:8000/docs` | Swagger UI |
+| `http://localhost:8000/health` | Health check |
