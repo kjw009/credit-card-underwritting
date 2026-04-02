@@ -17,7 +17,7 @@ ALGORITHM: str = "HS256"              # HMAC-SHA256 — standard for single-serv
 ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 # Tokens expire after 30 minutes
 
 # ── Password hashing ──────────────────────────────────────────────────────────
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 def get_pwd_hash(password: str) -> str:
     """Hash a plain-text password for storage in the database."""

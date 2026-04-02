@@ -28,5 +28,6 @@ python-multipart
 sqlalchemy
 
 # Authentication
-passlib
-python-jose
+passlib[argon2]
+python-jose[cryptography]
+argon2-cffi
