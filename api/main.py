@@ -76,11 +76,11 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# if not SECRET_KEY or len(SECRET_KEY) < 32:
-#     raise RuntimeError(
-#         "SECRET_KEY is not set or is too short (min 32 chars). "
-#         "Run: export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')"
-#     )
+if not SECRET_KEY or len(SECRET_KEY) < 32:
+    raise RuntimeError(
+        "SECRET_KEY is not set or is too short (min 32 chars). "
+        "Run: export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')"
+    )
 
 # Mount the auth router — adds /auth/register and /auth/token
 app.include_router(auth_router)
